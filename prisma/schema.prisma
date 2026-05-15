@@ -1,0 +1,210 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               Int       @id @default(autoincrement())
+  name             String
+  email            String?
+  phone            String    @unique
+  passwordHash     String    @map("password_hash")
+  role             String    @default("farmer")
+  status           String    @default("active")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  updatedAt        DateTime  @updatedAt @map("updated_at")
+  availability     String    @default("available")
+  location         String?
+  language         String    @default("en")
+  bookings         Booking[] @relation("FarmerBookings")
+  operatorBookings Booking[] @relation("OperatorBookings")
+  fuelLogs         FuelLog[] @relation("OperatorFuelLogs")
+  tractor          Tractor?       @relation("OperatorTractor")
+  notifications    Notification[] @relation("UserNotifications")
+  fuelLogsReviewed FuelLog[]      @relation("AdminFuelLogReviews")
+
+  @@map("users")
+}
+
+model Service {
+  id                 Int       @id @default(autoincrement())
+  name               String    @unique
+  baseRatePerHectare Float     @map("base_rate_per_hectare")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  description        String?   @db.Text
+  effectiveDate      DateTime  @default(now()) @map("effective_date")
+  isActive           Boolean   @default(true) @map("is_active")
+  isDeleted          Boolean   @default(false) @map("is_deleted")
+  bookings           Booking[]
+
+  @@map("services")
+}
+
+model SystemConfig {
+  id                   Int      @id @default(1)
+  dieselPrice          Float    @default(0) @map("diesel_price")
+  avgMileage           Float    @default(1) @map("avg_mileage")
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  contactEmail         String   @default("ops@dummy.com") @map("contact_email")
+  hubLocation          String   @default("Ludhiana Central Command") @map("hub_location")
+  hubName              String   @default("TractorLink Admin HQ") @map("hub_name")
+  preAlertHours        Int      @default(50) @map("pre_alert_hours")
+  serviceIntervalHours Int      @default(250) @map("service_interval_hours")
+  supportEmail         String   @default("support@dummy.com") @map("support_email")
+  baseLatitude         Float?   @map("base_latitude")
+  baseLongitude        Float?   @map("base_longitude")
+  perKmRate            Float    @default(500) @map("per_km_rate")
+  pricingMode          String   @default("ZONE") @map("pricing_mode")
+
+  @@map("system_config")
+}
+
+model Zone {
+  id                  Int      @id @default(autoincrement())
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+  maxDistance         Float?   @map("max_distance")
+  minDistance         Float    @map("min_distance")
+  surchargePerHectare Float    @map("surcharge_per_hectare")
+  status              String   @default("ACTIVE")
+
+  @@map("zones")
+}
+
+model Booking {
+  id                  Int       @id @default(autoincrement())
+  farmerId            Int       @map("farmer_id")
+  serviceId           Int       @map("service_id")
+  landSize            Float     @map("land_size")
+  location            String
+  basePrice           Float     @map("base_price")
+  distanceKm          Float     @default(0) @map("distance_km")
+  distanceCharge      Float     @default(0) @map("distance_charge")
+  fuelSurcharge       Float     @default(0) @map("fuel_surcharge")
+  totalPrice          Float     @map("total_price")
+  finalPrice          Float     @map("final_price")
+  tractorId           Int?      @map("tractor_id")
+  operatorId          Int?      @map("operator_id")
+  status              String    @default("pending")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  zoneName            String?   @map("zone_name")
+  airDistance         Float     @default(0) @map("air_distance")
+  farmerLatitude      Float?    @map("farmer_latitude")
+  farmerLongitude     Float?    @map("farmer_longitude")
+  hubLatitude         Float?    @map("hub_latitude")
+  hubLocation         String?   @map("hub_location")
+  hubLongitude        Float?    @map("hub_longitude")
+  hubName             String?   @map("hub_name")
+  paymentStatus       String    @default("pending") @map("payment_status")
+  roadDistance        Float     @default(0) @map("road_distance")
+  serviceNameSnapshot String?   @map("service_name_snapshot")
+  scheduledAt         DateTime? @map("scheduled_at")
+  source              String    @default("WEB")
+  locationFixed       Boolean   @default(true) @map("location_fixed")
+  farmer              User      @relation("FarmerBookings", fields: [farmerId], references: [id])
+  operator            User?     @relation("OperatorBookings", fields: [operatorId], references: [id])
+  service             Service   @relation(fields: [serviceId], references: [id])
+  tractor             Tractor?  @relation("TractorBookings", fields: [tractorId], references: [id])
+  payments            Payment[]
+
+  @@index([farmerId], map: "bookings_farmer_id_fkey")
+  @@index([operatorId], map: "bookings_operator_id_fkey")
+  @@index([serviceId], map: "bookings_service_id_fkey")
+  @@index([tractorId], map: "bookings_tractor_id_fkey")
+  @@map("bookings")
+}
+
+model Payment {
+  id        Int      @id @default(autoincrement())
+  bookingId Int      @map("booking_id")
+  amount    Float
+  method    String   @default("cash")
+  reference String?
+  status    String   @default("full")
+  createdAt DateTime @default(now()) @map("created_at")
+  booking   Booking  @relation(fields: [bookingId], references: [id])
+
+  @@index([bookingId], map: "payments_booking_id_fkey")
+  @@map("payments")
+}
+
+model Tractor {
+  id                  Int       @id @default(autoincrement())
+  status              String    @default("AVAILABLE")
+  operatorId          Int?      @unique @map("operator_id")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  model               String?
+  name                String
+  engineHours         Float     @default(0) @map("engine_hours")
+  lastServiceDate     DateTime? @map("last_service_date")
+  nextServiceDueHours Float     @default(250) @map("next_service_due_hours")
+  bookings            Booking[] @relation("TractorBookings")
+  fuelLogs            FuelLog[] @relation("TractorFuelLogs")
+  operator            User?     @relation("OperatorTractor", fields: [operatorId], references: [id])
+
+  @@map("tractors")
+}
+
+model FuelLog {
+  id         Int      @id @default(autoincrement())
+  operatorId Int      @map("operator_id")
+  tractorId  Int?     @map("tractor_id")
+  liters     Float
+  cost       Float
+  station    String
+  receiptUrl String?  @map("receipt_url")
+  createdAt  DateTime @default(now()) @map("created_at")
+  status     String   @default("PENDING")
+  reviewedBy Int?     @map("reviewed_by")
+  reviewedAt DateTime? @map("reviewed_at")
+  operator   User     @relation("OperatorFuelLogs", fields: [operatorId], references: [id])
+  tractor    Tractor? @relation("TractorFuelLogs", fields: [tractorId], references: [id])
+  reviewer   User?    @relation("AdminFuelLogReviews", fields: [reviewedBy], references: [id])
+
+  @@index([operatorId], map: "fuel_logs_operator_id_fkey")
+  @@index([tractorId], map: "fuel_logs_tractor_id_fkey")
+  @@index([reviewedBy], map: "fuel_logs_reviewed_by_fkey")
+  @@map("fuel_logs")
+}
+
+model FuelPriceLog {
+  id        Int      @id @default(autoincrement())
+  oldPrice  Float    @map("old_price")
+  newPrice  Float    @map("new_price")
+  adminId   Int      @map("admin_id")
+  timestamp DateTime @default(now()) @map("timestamp")
+
+  @@map("fuel_price_logs")
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  role      String   // admin / farmer / operator
+  message   String   @db.Text
+  type      String   // booking / assignment / tracking / payment
+  isRead    Boolean  @default(false) @map("is_read")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation("UserNotifications", fields: [userId], references: [id])
+
+  @@map("notifications")
+}
+
+model UssdLocation {
+  id                Int      @id @default(autoincrement())
+  name              String   @unique
+  chargePerHectare  Float    @map("charge_per_hectare")
+  isActive          Boolean  @default(true) @map("is_active")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("ussd_locations")
+}
