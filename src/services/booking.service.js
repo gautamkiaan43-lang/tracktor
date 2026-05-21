@@ -275,6 +275,7 @@ export const createBookingWithInitialPayment = async (farmerId, bookingData) => 
         bookingId: booking.id,
         amount: parseFloat(paymentAmount.toFixed(2)),
         method: paymentMethod,
+        reference: bookingData.reference || null,
         status: 'full' // This specific payment record is considered "full" for the amount paid
       }
     });

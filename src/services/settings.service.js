@@ -32,6 +32,11 @@ export const getSystemConfig = async () => {
     // Maintenance
     serviceIntervalHours: config.serviceIntervalHours,
     preAlertHours: config.preAlertHours,
+    // Loans
+    loanFeatureEnabled: config.loanFeatureEnabled,
+    loanActiveBank: config.loanActiveBank,
+    loanMaxAmount: config.loanMaxAmount,
+    loanMinBookingValue: config.loanMinBookingValue,
     updatedAt: config.updatedAt
   };
 };
@@ -59,6 +64,11 @@ export const updateSystemConfig = async (data, adminId = null) => {
   if (data.pricingMode !== undefined && ['ZONE', 'FUEL'].includes(data.pricingMode)) {
     updatePayload.pricingMode = data.pricingMode;
   }
+  // Loan Updates
+  if (data.loanFeatureEnabled !== undefined) updatePayload.loanFeatureEnabled = Boolean(data.loanFeatureEnabled);
+  if (data.loanActiveBank !== undefined) updatePayload.loanActiveBank = data.loanActiveBank;
+  if (data.loanMaxAmount !== undefined) updatePayload.loanMaxAmount = parseFloat(data.loanMaxAmount);
+  if (data.loanMinBookingValue !== undefined) updatePayload.loanMinBookingValue = parseFloat(data.loanMinBookingValue);
 
   const config = await prisma.systemConfig.upsert({
     where: { id: 1 },

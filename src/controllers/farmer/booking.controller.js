@@ -3,6 +3,7 @@ import NotificationService from '../../services/notification.service.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
 import { bookingCreateSchema, pricePreviewSchema } from '../../schema/booking.schema.js';
 import { formatCurrency } from '../../utils/format.js';
+import { verifyPaystackTransaction } from '../../utils/paystack.js';
 
 /**
  * Handle price preview request.
@@ -76,11 +77,47 @@ export const checkout = async (req, res) => {
   try {
     const validatedData = bookingCreateSchema.parse(req.body);
     const farmerId = req.user.id;
+    const { reference, paymentMethod } = req.body;
     
-    // Simulate successful payment validation here
-    // In a real flow, you would verify a gateway transaction reference.
+    // 1. Calculate pricing first to know the expected amount
+    const pricing = await BookingService.calculateBookingPrice(
+      validatedData.serviceType,
+      validatedData.landSize,
+      validatedData.zoneId,
+      validatedData.farmerLatitude,
+      validatedData.farmerLongitude
+    );
+    const expectedPrice = pricing.totalPrice;
+    const expectedPaymentAmount = validatedData.paymentOption === 'full' ? expectedPrice : expectedPrice * 0.5;
+
+    // 2. Verify Paystack transaction if payment method is paystack
+    if (paymentMethod === 'paystack') {
+      if (!reference) {
+        return sendError(res, "Payment reference is required for Paystack checkout", 400, "VALIDATION_ERROR");
+      }
+      
+      const verifiedTx = await verifyPaystackTransaction(reference);
+      
+      // Verify amount if not bypass dummy
+      if (!verifiedTx.isDummy) {
+        const expectedAmountKobo = Math.round(expectedPaymentAmount * 100);
+        if (Math.abs(verifiedTx.amount - expectedAmountKobo) > 100) {
+          return sendError(
+            res,
+            `Payment verification failed. Amount mismatch: expected ${expectedPaymentAmount} NGN, but got ${verifiedTx.amount / 100} NGN`,
+            400,
+            "PAYMENT_ERROR"
+          );
+        }
+      }
+    }
     
-    const result = await BookingService.createBookingWithInitialPayment(farmerId, validatedData);
+    // 3. Create booking and payment record
+    const result = await BookingService.createBookingWithInitialPayment(farmerId, {
+      ...validatedData,
+      paymentMethod: paymentMethod || 'online',
+      reference: reference || null
+    });
     
     const formattedBooking = {
       ...result,

@@ -11,9 +11,20 @@ import paymentRoutes from './routes/payment.routes.js';
 import notificationRoutes from './routes/notification.routes.js';
 import requestRoutes from './routes/request.routes.js';
 import ussdRoutes from './routes/ussd.routes.js';
+import loanRoutes from './routes/loan.routes.js';
+import aiRoutes from './routes/ai.routes.js';
+import webhookRoutes from './routes/webhook.routes.js';
+import './cron/ai.cron.js'; // Starts node-cron daily scheduler
 import { sendError } from './utils/response.js';
 
 dotenv.config();
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[CRASH] Unhandled Rejection at:', promise, 'reason:', reason);
+});
+process.on('uncaughtException', (err, origin) => {
+  console.error('[CRASH] Uncaught Exception:', err, 'origin:', origin);
+});
 
 const app = express();
 const httpServer = createServer(app);
@@ -48,7 +59,11 @@ app.set('broadcastFarmerDestination', broadcastFarmerDestination);
 
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf;
+  }
+}));
 app.use('/uploads', express.static('uploads'));
 
 // Routes
@@ -60,6 +75,9 @@ app.use('/api/payments', paymentRoutes);
 app.use('/api/request', requestRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/ussd', ussdRoutes);
+app.use('/api/loans', loanRoutes);
+app.use('/api/ai', aiRoutes);
+app.use('/api/webhooks', webhookRoutes);
 
 // Root Route
 app.get('/', (req, res) => {
@@ -173,3 +191,4 @@ io.on('connection', (socket) => {
 httpServer.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+// Nodemon trigger reload to bind port 5000 successfully

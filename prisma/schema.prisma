@@ -26,6 +26,7 @@ model User {
   tractor          Tractor?       @relation("OperatorTractor")
   notifications    Notification[] @relation("UserNotifications")
   fuelLogsReviewed FuelLog[]      @relation("AdminFuelLogReviews")
+  loans            Loan[]         @relation("UserLoans")
 
   @@map("users")
 }
@@ -61,6 +62,10 @@ model SystemConfig {
   baseLongitude        Float?   @map("base_longitude")
   perKmRate            Float    @default(500) @map("per_km_rate")
   pricingMode          String   @default("ZONE") @map("pricing_mode")
+  loanFeatureEnabled   Boolean  @default(false) @map("loan_feature_enabled")
+  loanActiveBank       String   @default("MOCK") @map("loan_active_bank")
+  loanMaxAmount        Float    @default(100000) @map("loan_max_amount")
+  loanMinBookingValue  Float    @default(50000) @map("loan_min_booking_value")
 
   @@map("system_config")
 }
@@ -113,6 +118,7 @@ model Booking {
   service             Service   @relation(fields: [serviceId], references: [id])
   tractor             Tractor?  @relation("TractorBookings", fields: [tractorId], references: [id])
   payments            Payment[]
+  loan                Loan?
 
   @@index([farmerId], map: "bookings_farmer_id_fkey")
   @@index([operatorId], map: "bookings_operator_id_fkey")
@@ -208,3 +214,88 @@ model UssdLocation {
 
   @@map("ussd_locations")
 }
+
+model Loan {
+  id                  Int      @id @default(autoincrement())
+  bookingId           Int      @unique @map("booking_id")
+  farmerId            Int      @map("farmer_id")
+  amount              Float
+  provider            String   @default("MOCK")
+  status              String   @default("PENDING") // PENDING, APPROVED, REJECTED, PAID
+  bvnSnapshot         String?  @map("bvn_snapshot")
+  emiMonths           Int      @default(3) @map("emi_months")
+  emiAmount           Float    @map("emi_amount")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  booking             Booking  @relation(fields: [bookingId], references: [id])
+  farmer              User     @relation("UserLoans", fields: [farmerId], references: [id])
+
+  @@index([bookingId], map: "loans_booking_id_fkey")
+  @@index([farmerId], map: "loans_farmer_id_fkey")
+  @@map("loans")
+}
+
+model AiSeasonalAnalytics {
+  id              Int      @id @default(autoincrement())
+  month           String   // e.g., "January", "February", or "Harvest Season"
+  bookingCount    Int      @map("booking_count")
+  revenue         Float
+  peakDemandScore Float    @map("peak_demand_score")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("ai_seasonal_analytics")
+}
+
+model AiRevenueTrend {
+  id               Int      @id @default(autoincrement())
+  period           String   // YYYY-MM
+  totalRevenue     Float    @map("total_revenue")
+  growthPercentage Float    @map("growth_percentage")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("ai_revenue_trends")
+}
+
+model AiLocationAnalysis {
+  id              Int      @id @default(autoincrement())
+  locationName    String   @map("location_name")
+  latitude        Float
+  longitude       Float
+  bookingCount    Int      @map("booking_count")
+  revenue         Float
+  peakDemandScore Float    @map("peak_demand_score")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@map("ai_location_analysis")
+}
+
+model AiForecastReport {
+  id                Int      @id @default(autoincrement())
+  forecastDate      DateTime @map("forecast_date")
+  predictedBookings Int      @map("predicted_bookings")
+  confidenceMin     Int      @map("confidence_min")
+  confidenceMax     Int      @map("confidence_max")
+  reason            String?  @db.Text
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@map("ai_forecast_reports")
+}
+
+model AiGrowthStatistic {
+  id               Int      @id @default(autoincrement())
+  metricName       String   @map("metric_name") // e.g. "morning_vs_evening_booking_ratio"
+  metricValue      Float    @map("metric_value")
+  previousValue    Float?   @map("previous_value")
+  growthPercentage Float?   @map("growth_percentage")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("ai_growth_statistics")
+}
+
+

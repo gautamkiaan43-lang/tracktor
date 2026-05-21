@@ -6,6 +6,7 @@ import * as reportController from '../controllers/admin/report.controller.js';
 import * as settingsController from '../controllers/admin/settings.controller.js';
 import * as fuelController from '../controllers/admin/fuel.controller.js';
 import * as ussdLocationController from '../controllers/admin/ussdLocation.controller.js';
+import * as aiController from '../controllers/admin/ai.controller.js';
 import { verifyToken, requireRole } from '../middleware/auth.middleware.js';
 
 const router = express.Router();
@@ -90,6 +91,9 @@ router.get('/services', settingsController.listServices);
 router.put('/services', settingsController.updateServiceRates);
 router.put('/services/:id', settingsController.updateService);
 router.delete('/services/:id', settingsController.deleteService);
+
+// AI Demand Forecasting
+router.get('/ai/forecast', aiController.getDemandForecast);
 
 export default router;
 

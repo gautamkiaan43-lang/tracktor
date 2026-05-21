@@ -59,7 +59,7 @@ export const getFarmerPendingBookings = async (farmerId) => {
 /**
  * Process payment for a specific booking.
  */
-export const processBookingPayment = async (farmerId, { bookingId, amount, method }) => {
+export const processBookingPayment = async (farmerId, { bookingId, amount, method, reference }) => {
   console.log(`[PaymentService] Processing payment for booking ${bookingId} | Amount: ${amount}`);
 
   const booking = await prisma.booking.findUnique({
@@ -85,7 +85,8 @@ export const processBookingPayment = async (farmerId, { bookingId, amount, metho
       data: {
         bookingId: booking.id,
         amount: parseFloat(amount),
-        method: method || 'online' // Default to online
+        method: method || 'online', // Default to online
+        reference: reference || null
       }
     });
 

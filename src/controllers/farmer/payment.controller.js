@@ -2,6 +2,7 @@ import * as PaymentService from '../../services/payment.service.js';
 import NotificationService from '../../services/notification.service.js';
 import prisma from '../../config/db.js';
 import { sendSuccess, sendError } from '../../utils/response.js';
+import { verifyPaystackTransaction } from '../../utils/paystack.js';
 
 /**
  * Get all pending/unpaid bookings for the farmer.
@@ -35,13 +36,35 @@ export const getPaymentHistory = async (req, res) => {
 export const payBooking = async (req, res) => {
   try {
     const farmerId = req.user.id;
-    const { bookingId, amount, method } = req.body;
+    const { bookingId, amount, method, reference } = req.body;
 
     if (!bookingId || !amount) {
       return sendError(res, "bookingId and amount are required", 400, "VALIDATION_ERROR");
     }
 
-    const payment = await PaymentService.processBookingPayment(farmerId, { bookingId, amount, method });
+    // 1. Verify Paystack transaction if method is paystack
+    if (method === 'paystack') {
+      if (!reference) {
+        return sendError(res, "Payment reference is required for Paystack payments", 400, "VALIDATION_ERROR");
+      }
+
+      const verifiedTx = await verifyPaystackTransaction(reference);
+
+      // Verify amount if not bypass dummy
+      if (!verifiedTx.isDummy) {
+        const expectedAmountKobo = Math.round(amount * 100);
+        if (Math.abs(verifiedTx.amount - expectedAmountKobo) > 100) {
+          return sendError(
+            res,
+            `Payment verification failed. Amount mismatch: expected ${amount} NGN, but got ${verifiedTx.amount / 100} NGN`,
+            400,
+            "PAYMENT_ERROR"
+          );
+        }
+      }
+    }
+
+    const payment = await PaymentService.processBookingPayment(farmerId, { bookingId, amount, method, reference });
     
     // Trigger Notifications for Payment
     try {
