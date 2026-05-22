@@ -16,7 +16,8 @@ export const getUssdLocations = async (req, res) => {
  */
 export const handleUssd = async (req, res) => {
   const { sessionId, phoneNumber, text } = req.body;
-  
+
+
   if (!sessionId || !phoneNumber) {
     return res.status(400).send("END Invalid request parameters.");
   }

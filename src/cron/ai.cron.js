@@ -13,3 +13,9 @@ cron.schedule('0 0 * * *', async () => {
 });
 
 console.log('[CRON] AI Daily Scheduler successfully initialized and bound (runs daily at 00:00).');
+
+// Run immediately on server startup so you don't have to wait for midnight or run a second terminal on Railway!
+setTimeout(() => {
+  console.log('[STARTUP] Running initial AI Analysis so frontend has fresh data immediately...');
+  runDailyAIAnalysis().catch(err => console.error(err));
+}, 5000); // Wait 5 seconds for DB to be fully ready before starting the python process

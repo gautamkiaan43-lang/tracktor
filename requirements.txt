@@ -1,0 +1,4 @@
+prophet
+pandas
+mysql-connector-python
+python-dotenv

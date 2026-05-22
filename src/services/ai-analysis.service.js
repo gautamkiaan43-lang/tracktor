@@ -26,8 +26,8 @@ export const runDailyAIAnalysis = async () => {
   ]);
 
   if (bookings.length < 5) {
-    console.log('[AI-Analysis] Low historical data. Generating realistic synthetic baseline...');
-    await generateSyntheticBaseline();
+    console.log('[AI-Analysis] Low historical data. Prophet requires at least 5 bookings to generate a forecast.');
+    // We no longer generate synthetic baseline to ensure absolute accuracy.
     return;
   }
 
@@ -36,7 +36,7 @@ export const runDailyAIAnalysis = async () => {
   await computeRevenueTrends(bookings);
   await computeLocationAnalysis(bookings);
   await computeGrowthStatistics(bookings);
-  await computeFutureForecast(bookings);
+  await computeFutureForecast(); // No longer takes bookings directly, Python handles it
 
   console.log('[AI-Analysis] Analysis successfully completed and persisted to MySQL database.');
 };
@@ -241,127 +241,33 @@ async function computeGrowthStatistics(bookings) {
 }
 
 /**
- * Computes 7-day demand projections using statistical moving averages
+ * Computes 7-day demand projections using Prophet Machine Learning model in Python
  */
-async function computeFutureForecast(bookings) {
-  // Find average daily rate over last 30 days
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-  
-  const recentBookings = bookings.filter(b => new Date(b.createdAt) >= thirtyDaysAgo);
-  const dailyRate = Math.max(recentBookings.length / 30, 1.5);
-  
-  const forecastRecords = [];
+async function computeFutureForecast() {
+  const { exec } = await import('child_process');
+  const path = await import('path');
+  const util = await import('util');
+  const execPromise = util.promisify(exec);
 
-  for (let i = 1; i <= 7; i++) {
-    const forecastDate = new Date();
-    forecastDate.setDate(forecastDate.getDate() + i);
-
-    // Apply seasonal cyclical wave fluctuation
-    const fluctuation = 1 + (Math.sin(i * 0.9) * 0.25);
-    const predictedBookings = Math.max(1, Math.round(dailyRate * fluctuation));
+  try {
+    console.log('[AI-Analysis] Spawning Python Prophet model for accurate predictions...');
+    const pythonScript = path.join(process.cwd(), 'ai_engine', 'forecast.py');
     
-    // Confidence bands
-    const confidenceMin = Math.max(1, Math.floor(predictedBookings * 0.8));
-    const confidenceMax = Math.ceil(predictedBookings * 1.3);
-    
-    // Set realistic reasons
-    let reason = "Historical trend matching baseline activity";
-    if (i % 3 === 0) {
-      reason = "Seasonal peak detected due to harvest timelines";
-    } else if (i === 1 || i === 5) {
-      reason = "High probability of favorable regional weather driving demand";
+    let stdout, stderr;
+    try {
+      // Try python3 first (standard on Linux/Live servers)
+      ({ stdout, stderr } = await execPromise(`python3 "${pythonScript}"`));
+    } catch (err) {
+      // Fallback to python (standard on Windows/Local)
+      ({ stdout, stderr } = await execPromise(`python "${pythonScript}"`));
     }
-
-    forecastRecords.push({
-      forecastDate,
-      predictedBookings,
-      confidenceMin,
-      confidenceMax,
-      reason
-    });
+    
+    if (stderr) {
+      console.warn('[AI-Analysis] Prophet Script Warning/Info:', stderr);
+    }
+    console.log('[AI-Analysis] Prophet Script Output:', stdout.trim());
+  } catch (error) {
+    console.error('[AI-Analysis] Error running Prophet ML script:', error);
   }
-
-  await prisma.aiForecastReport.createMany({
-    data: forecastRecords
-  });
 }
 
-/**
- * Seed high-quality realistic values when real bookings are empty/low
- */
-async function generateSyntheticBaseline() {
-  console.log('[AI-Analysis] Creating high-fidelity seed analytics...');
-
-  // 1. Seasonal baseline
-  const seasons = [
-    { month: "January", bookingCount: 12, revenue: 152000, peakDemandScore: 25 },
-    { month: "February", bookingCount: 18, revenue: 228000, peakDemandScore: 35 },
-    { month: "March", bookingCount: 35, revenue: 450000, peakDemandScore: 65 },
-    { month: "April", bookingCount: 52, revenue: 680000, peakDemandScore: 90 },
-    { month: "May", bookingCount: 58, revenue: 790000, peakDemandScore: 100 }, // Peak
-    { month: "June", bookingCount: 22, revenue: 290000, peakDemandScore: 40 },
-    { month: "July", bookingCount: 15, revenue: 198000, peakDemandScore: 30 },
-    { month: "August", bookingCount: 20, revenue: 250000, peakDemandScore: 35 },
-    { month: "September", bookingCount: 42, revenue: 540000, peakDemandScore: 75 },
-    { month: "October", bookingCount: 48, revenue: 610000, peakDemandScore: 85 },
-    { month: "November", bookingCount: 30, revenue: 380000, peakDemandScore: 50 },
-    { month: "December", bookingCount: 14, revenue: 172000, peakDemandScore: 28 }
-  ];
-  await prisma.aiSeasonalAnalytics.createMany({ data: seasons });
-
-  // 2. Revenue Trends
-  const trends = [
-    { period: "2026-01", totalRevenue: 152000, growthPercentage: 12.5 },
-    { period: "2026-02", totalRevenue: 228000, growthPercentage: 50.0 },
-    { period: "2026-03", totalRevenue: 450000, growthPercentage: 97.3 },
-    { period: "2026-04", totalRevenue: 680000, growthPercentage: 51.1 },
-    { period: "2026-05", totalRevenue: 790000, growthPercentage: 16.1 }
-  ];
-  await prisma.aiRevenueTrend.createMany({ data: trends });
-
-  // 3. Location Analysis (with real-looking Lagos, Ludhiana, Ibadan, etc. coordinates)
-  const locations = [
-    { locationName: "Ludhiana Command", latitude: 30.900965, longitude: 75.857277, bookingCount: 65, revenue: 820000, peakDemandScore: 100 },
-    { locationName: "Jalandhar Outpost", latitude: 31.326015, longitude: 75.576180, bookingCount: 42, revenue: 510000, peakDemandScore: 65 },
-    { locationName: "Amritsar Sector", latitude: 31.633980, longitude: 74.872260, bookingCount: 25, revenue: 310000, peakDemandScore: 38 },
-    { locationName: "Lagos Hub", latitude: 6.524379, longitude: 3.379206, bookingCount: 88, revenue: 1100000, peakDemandScore: 100 },
-    { locationName: "Ibadan Sector", latitude: 7.377535, longitude: 3.947041, bookingCount: 49, revenue: 640000, peakDemandScore: 55 }
-  ];
-  await prisma.aiLocationAnalysis.createMany({ data: locations });
-
-  // 4. Growth statistics
-  const growth = [
-    { metricName: "morning_booking_percentage", metricValue: 56.5, previousValue: 35.0, growthPercentage: 61.4 },
-    { metricName: "overall_demand_growth", metricValue: 35.5, previousValue: 25.0, growthPercentage: 42.0 },
-    { metricName: "harvest_season_growth", metricValue: 40.0, previousValue: 28.5, growthPercentage: 40.35 }
-  ];
-  await prisma.aiGrowthStatistic.createMany({ data: growth });
-
-  // 5. 7-Day Forecast Projections
-  const forecasts = [];
-  const forecastReasons = [
-    "Harvest season demand surge matching historical pattern",
-    "Favorable regional weather parameters increase tractor request index",
-    "Pre-monsoon operational window peak activity",
-    "Regular historical sowing timeline trend matching",
-    "Aggregated crop cycle metrics indicate rising request volumes",
-    "Weekend operator supply matching demand levels",
-    "Historical command center data points to upward volume trajectory"
-  ];
-
-  for (let i = 1; i <= 7; i++) {
-    const forecastDate = new Date();
-    forecastDate.setDate(forecastDate.getDate() + i);
-
-    const predicted = Math.round(15 + Math.sin(i) * 5);
-    forecasts.push({
-      forecastDate,
-      predictedBookings: predicted,
-      confidenceMin: Math.max(1, predicted - 3),
-      confidenceMax: predicted + 4,
-      reason: forecastReasons[i - 1]
-    });
-  }
-  await prisma.aiForecastReport.createMany({ data: forecasts });
-}
