@@ -253,7 +253,7 @@ async function computeFutureForecast() {
     console.log('[AI-Analysis] Spawning Python Prophet model for accurate predictions...');
     const pythonScript = path.join(process.cwd(), 'ai_engine', 'forecast.py');
     // We assume python or python3 is available in PATH
-    const { stdout, stderr } = await execPromise(`python "${pythonScript}"`);
+    const { stdout, stderr } = await execPromise(`python3 "${pythonScript}"`);
     
     if (stderr) {
       console.warn('[AI-Analysis] Prophet Script Warning/Info:', stderr);
