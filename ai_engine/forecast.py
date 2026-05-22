@@ -6,53 +6,89 @@ from sqlalchemy import create_engine, text
 from datetime import datetime
 from dotenv import load_dotenv
 
+# Load environment variables
 dotenv_path = os.path.join(os.path.dirname(__file__), '..', '.env')
 load_dotenv(dotenv_path)
 
+
 def main():
     try:
-        db_url = os.getenv('DATABASE_URL')
+        # Get database URL
+        db_url = os.getenv("DATABASE_URL")
 
         if not db_url:
             print("ERROR: DATABASE_URL not found")
             sys.exit(1)
 
-        engine = create_engine(db_url)
+        # Convert Railway/MySQL URL for SQLAlchemy PyMySQL
+        if db_url.startswith("mysql://"):
+            db_url = db_url.replace(
+                "mysql://",
+                "mysql+pymysql://",
+                1
+            )
 
-        query = "SELECT created_at FROM bookings"
+        # Create SQLAlchemy engine
+        engine = create_engine(
+            db_url,
+            pool_pre_ping=True
+        )
+
+        # Fetch historical bookings
+        query = """
+            SELECT created_at
+            FROM bookings
+            WHERE created_at IS NOT NULL
+            ORDER BY created_at ASC
+        """
 
         df = pd.read_sql(query, engine)
 
+        # Validate minimum data
         if df.empty or len(df) < 5:
-            print("WARNING: Not enough data for Prophet. Minimum 5 bookings required.")
+            print("WARNING: Not enough booking data for Prophet forecasting.")
             sys.exit(0)
 
-        df['ds'] = pd.to_datetime(df['created_at'])
+        # Prepare Prophet dataset
+        df['created_at'] = pd.to_datetime(df['created_at'])
 
-        daily_bookings = df.groupby(df['ds'].dt.date).size().reset_index(name='y')
+        daily_bookings = (
+            df.groupby(df['created_at'].dt.date)
+            .size()
+            .reset_index(name='y')
+        )
+
+        daily_bookings.columns = ['ds', 'y']
 
         daily_bookings['ds'] = pd.to_datetime(daily_bookings['ds'])
 
+        # Train Prophet model
         model = Prophet(
             yearly_seasonality=True,
             weekly_seasonality=True,
-            daily_seasonality=False
+            daily_seasonality=False,
+            changepoint_prior_scale=0.05
         )
 
         model.fit(daily_bookings)
 
+        # Create future dataframe
         future = model.make_future_dataframe(periods=7)
 
+        # Generate forecast
         forecast = model.predict(future)
 
+        # Filter future only
         today = datetime.now().date()
 
         future_forecast = forecast[
             forecast['ds'].dt.date > today
         ].head(7)
 
+        # Save forecast into DB
         with engine.begin() as connection:
 
+            # Clear old forecasts
             connection.execute(
                 text("DELETE FROM ai_forecast_reports")
             )
@@ -84,16 +120,39 @@ def main():
 
             for _, row in future_forecast.iterrows():
 
-                predicted = max(0, int(round(row['yhat'])))
-                conf_min = max(0, int(round(row['yhat_lower'])))
-                conf_max = max(0, int(round(row['yhat_upper'])))
+                predicted = max(
+                    0,
+                    int(round(row['yhat']))
+                )
 
+                conf_min = max(
+                    0,
+                    int(round(row['yhat_lower']))
+                )
+
+                conf_max = max(
+                    0,
+                    int(round(row['yhat_upper']))
+                )
+
+                # AI reasoning text
                 if predicted > avg_historical * 1.2:
-                    reason = "AI detected a seasonal peak (20% above average demand)."
+                    reason = (
+                        "AI detected a seasonal peak "
+                        "(20% above average demand)."
+                    )
+
                 elif predicted < avg_historical * 0.8:
-                    reason = "AI predicts slightly lower seasonal demand."
+                    reason = (
+                        "AI predicts slightly lower "
+                        "seasonal demand."
+                    )
+
                 else:
-                    reason = "AI predicts stable historical demand patterns."
+                    reason = (
+                        "AI predicts stable historical "
+                        "demand patterns."
+                    )
 
                 connection.execute(
                     insert_query,
@@ -111,6 +170,7 @@ def main():
     except Exception as e:
         print(f"ERROR: {str(e)}")
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()
