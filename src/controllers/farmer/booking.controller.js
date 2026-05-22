@@ -11,6 +11,7 @@ import { verifyPaystackTransaction } from '../../utils/paystack.js';
 export const getPricePreview = async (req, res) => {
   try {
     const validatedData = pricePreviewSchema.parse(req.body);
+    console.log("[getPricePreview] body:", req.body, "validated:", validatedData);
     const pricing = await BookingService.calculateBookingPrice(
       validatedData.serviceType,
       validatedData.landSize,
