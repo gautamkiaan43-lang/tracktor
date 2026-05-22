@@ -1,6 +1,7 @@
 numpy==1.26.4
 pandas==2.2.2
-prophet==1.1.5
+prophet==1.1.6
+cmdstanpy==1.2.2
 plotly==5.22.0
 SQLAlchemy==2.0.30
 mysql-connector-python==8.4.0
