@@ -17,6 +17,7 @@ import webhookRoutes from './routes/webhook.routes.js';
 import './cron/ai.cron.js'; // Starts node-cron daily scheduler
 import { sendError } from './utils/response.js';
 
+
 dotenv.config();
 
 process.on('unhandledRejection', (reason, promise) => {
