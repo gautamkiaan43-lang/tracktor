@@ -12,9 +12,12 @@ RUN apt-get update && apt-get install -y \
     liblapack-dev
 
 COPY package*.json ./
+COPY prisma ./prisma
 COPY requirements.txt ./
 
 RUN npm install
+
+RUN npx prisma generate
 
 RUN pip3 install --break-system-packages --upgrade pip && \
     pip3 install --break-system-packages -r requirements.txt
