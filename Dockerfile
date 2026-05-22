@@ -2,7 +2,7 @@ FROM node:20-alpine AS base
 
 # Install Python 3 and build tools needed for Prophet (C++ extension)
 RUN apk add --no-cache \
-    python3~=3.11 \
+    python3 \
     py3-pip \
     gcc \
     g++ \
